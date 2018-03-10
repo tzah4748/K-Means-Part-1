@@ -161,8 +161,8 @@ double distPointToPoint(Point p1, Point p2)
 
 double calculateDiameter(Cluster* someCluster, Point* allPoints, int numOfPoints)
 {
-	int diameter = 0;
-	int ret = 0;
+	double diameter = 0;
+	double ret = 0;
 	for (int i = 0; i < numOfPoints; i++)
 	{
 		Point a = allPoints[i];
