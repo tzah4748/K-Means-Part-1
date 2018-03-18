@@ -1,42 +1,22 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <math.h>
-#include <string.h>
-#include <stdbool.h>
 #include "functions.h"
 
 int main(int argc, char *argv[])
-{	
-	FILE *f;
-	const char* inputPath = "input.txt";
-	const char* outputPath = "output.txt";
+{
+	clock_t t1, t2;
+	t1 = clock();
+	const char* inputFile = "input.txt";
+	const char* outputFile = "output.txt";
 	/*Initials*/
-	int numOfPoints, numOfClusters, timeInterval;
-	double deltaTime;
-	int maxIterations;
-	double qualityMeasure;
-
-	Point* allPoints;
-	Cluster* clusterCenters;
-	f = fopen(inputPath, "r");
-	if (f == NULL)
-	{
-		printf("Failed opening the file. Exiting!\n");
-		return 0;
-	}
-	getInitialsFromFile(f, &numOfPoints, &numOfClusters, &timeInterval, &deltaTime, &maxIterations, &qualityMeasure);
-	allPoints = (Point*)calloc(numOfPoints, sizeof(Point));
-	getPointsFromFile(f, allPoints);
-	clusterCenters = (Cluster*)calloc(numOfClusters, sizeof(Cluster));
-	initializeClusters(clusterCenters, allPoints, numOfClusters);
-
-	double x, y, distFromCluster, oldDistFromCluster;
-	int terminationCondition = false;
-	double time;
-	int iter;
-	double terminationQuality;
+	int numOfPoints, numOfClusters, maxIterations, iter, lastIndexGiven, terminationCondition = false;
+	double timeInterval, deltaTime, qualityMeasure, time, terminationQuality, x, y, distFromCluster, oldDistFromCluster;
+	Point *allPoints;
+	Cluster *clusterCenters;
 	
+	//Generate new random points every excution of the code
+	//createRandomPointsFile(inputFile);
+
+	allPoints = getPointsFromFile(inputFile, &numOfPoints, &numOfClusters, &timeInterval, &deltaTime, &maxIterations, &qualityMeasure);
+	clusterCenters = initializeClusters(allPoints, numOfClusters);
 	for (time = 0; time < timeInterval; time += deltaTime)
 	{
 		for (iter = 0; iter < maxIterations; iter++)
@@ -48,10 +28,15 @@ int main(int argc, char *argv[])
 				/*At the beginning of the iteration(iter) the point's center is it's old center, meaning it hasn't changed yet*/
 				allPoints[i].centerChanged = false;
 				/*Define a center to a point if it doesn't exists*/
-				if(allPoints[i].center == NULL)
-					allPoints[i].center = &clusterCenters[0];
+				if (allPoints[i].clusterIndex == -1)
+				{
+					allPoints[i].clusterIndex = 0;
+					lastIndexGiven = -1;
+				}
+				else
+					lastIndexGiven = allPoints[i].clusterIndex;
 				/*Calculate the distance from point[i] to it's own cluster center*/
-				oldDistFromCluster = sqrt(pow((allPoints[i].center->x - x), 2) + pow((allPoints[i].center->y - y), 2));
+				oldDistFromCluster = sqrt(pow((clusterCenters[allPoints[i].clusterIndex].x - x), 2) + pow((clusterCenters[allPoints[i].clusterIndex].y - y), 2));
 				/*For each point[i] calculate a new cluster center*/
 				for (int j = 0; j < numOfClusters; j++)
 				{
@@ -64,15 +49,19 @@ int main(int argc, char *argv[])
 					if (distFromCluster < oldDistFromCluster)
 					{
 						oldDistFromCluster = distFromCluster;
-						allPoints[i].center = &clusterCenters[j];
-						allPoints[i].centerChanged = true;
+						lastIndexGiven = j;
 					}
+				}
+				if (lastIndexGiven != allPoints[i].clusterIndex)
+				{
+					allPoints[i].centerChanged = true;
+					allPoints[i].clusterIndex = lastIndexGiven;
 				}
 				/*After defining a point to its center, add the point to the center
 				- This simple logic works due to the fact a cluster's new center is an average of all points in the cluster*/
-				allPoints[i].center->pointsInCluster += 1;
-				allPoints[i].center->xSum += x;
-				allPoints[i].center->ySum += y;
+				clusterCenters[allPoints[i].clusterIndex].xSum += x;
+				clusterCenters[allPoints[i].clusterIndex].ySum += y;
+				clusterCenters[allPoints[i].clusterIndex].pointsInCluster += 1;
 				/*Termination condition/flag will stay true as long as at least one point[i] defined a new center*/
 				terminationCondition |= allPoints[i].centerChanged;
 			}
@@ -92,87 +81,87 @@ int main(int argc, char *argv[])
 		}
 		/*After the "iter" loop has stopped, calculate each cluster's diameter*/
 		for (int j = 0; j < numOfClusters; j++)
-		{
-			clusterCenters[j].diameter = calculateDiameter(&clusterCenters[j], allPoints, numOfPoints);
-		}
+			clusterCenters[j].diameter = calculateDiameter(allPoints, numOfPoints, j);
 		/*Check if the quality of current clusters is enough to stop time iterations loop*/
 		terminationQuality = calculateQM(clusterCenters, numOfClusters);
 		if (terminationQuality <= qualityMeasure)
 			break;
 	}
+	writeResultsToFile(outputFile, time, iter, terminationQuality, clusterCenters, numOfClusters);
 
-	writeResultsToFile(f, outputPath, time, iter, terminationQuality, clusterCenters, numOfClusters);
-	
 	/*Printed results (for debugging)*/
-	/*
+	
 	printf("First occurence at t = %f, iter = %d with q = %f\n\nCenter of the Clusters:\n\n", time, iter, terminationQuality);
 	for (int i = 0; i < numOfClusters; i++)
 	{
-		printf("%f %f\n\n", clusterCenters[i].x, clusterCenters[i].y);
+	printf("%f %f\n\n", clusterCenters[i].x, clusterCenters[i].y);
 	}
-	*/
+	
+	printf("Done!\nFile Location:\n%s\n", outputFile);
 	free(allPoints);
 	free(clusterCenters);
+	t2 = clock();
+	printf("K-Means Time: %f\n", (double)(t2 - t1) / CLOCKS_PER_SEC);
 	return 0;
 }
 
-void getInitialsFromFile(FILE* f, int* numOfPoints, int* numOfClusters, int* timeInterval, double* deltaTime, int* maxIterations, double* qualityMeasure)
-{	
-	fscanf(f, "%d %d %d %lf %d %lf", numOfPoints, numOfClusters, timeInterval, deltaTime, maxIterations, qualityMeasure);
-}
-void getPointsFromFile(FILE *f, Point* allPoints)
+void checkFile(FILE* f)
 {
-	int i = 0;
-	while (!feof(f))
+	if (!f)
 	{
-		fscanf(f, "%lf %lf %lf %lf", &allPoints[i].x, &allPoints[i].y, &allPoints[i].vx, &allPoints[i].vy);
-		i += 1;
+		printf("Failed opening the file. Exiting!\n");
+		exit(1);
 	}
-	fclose(f);
 }
-void initializeClusters(Cluster* clusterCenters, Point* allPoints, int numOfClusters)
+
+Point* getPointsFromFile(const char* inputFile, int* numOfPoints, int* numOfClusters, double* timeInterval, double* deltaTime, int* maxIterations, double* qualityMeasure)
 {
+	FILE* f;
+	fopen_s(&f, inputFile, "r");
+	checkFile(f);
+	fscanf_s(f, "%d %d %lf %lf %d %lf", numOfPoints, numOfClusters, timeInterval, deltaTime, maxIterations, qualityMeasure);
+	Point* allPoints = (Point*)calloc(*numOfPoints, sizeof(Point));
+	for (int i = 0; i < *numOfPoints; i++)
+		fscanf_s(f, "%lf %lf %lf %lf", &allPoints[i].x, &allPoints[i].y, &allPoints[i].vx, &allPoints[i].vy);
+	fclose(f);
+	return allPoints;
+}
+
+Cluster* initializeClusters(Point* allPoints, int numOfClusters)
+{
+	Cluster* clusterCenters = (Cluster*)calloc(numOfClusters, sizeof(Cluster));
 	for (int i = 0; i < numOfClusters; i++)
 	{
 		clusterCenters[i].x = allPoints[i].x;
 		clusterCenters[i].y = allPoints[i].y;
 	}
+	return clusterCenters;
 }
 
 double xPosition(Point p, double time)
 {
 	return p.x + time*p.vx;
 }
+
 double yPosition(Point p, double time)
 {
 	return p.y + time*p.vy;
 }
 
-double distClusterToPoint(Cluster c, Point p)
-{
-	double ret = sqrt((c.x - p.x)*(c.x - p.x) + (c.y - p.y)*(c.y - p.y));
-	return ret;
-}
-double distPointToPoint(Point p1, Point p2)
-{
-	double ret = sqrt((p1.x - p2.x)*(p1.x - p2.x) + (p1.y - p2.y)*(p1.y - p2.y));
-	return ret;
-}
-
-double calculateDiameter(Cluster* someCluster, Point* allPoints, int numOfPoints)
+double calculateDiameter(Point* allPoints, int numOfPoints, int clusterIndex)
 {
 	double diameter = 0;
 	double ret = 0;
 	for (int i = 0; i < numOfPoints; i++)
 	{
 		Point a = allPoints[i];
-		
-		if (a.center == someCluster)
+
+		if (a.clusterIndex == clusterIndex)
 		{
-			for (int j = 0; j < numOfPoints; j++)
+			for (int j = i + 1; j < numOfPoints; j++)
 			{
 				Point b = allPoints[j];
-				if (i != j & b.center == someCluster)
+				if (b.clusterIndex == clusterIndex)
 				{
 					diameter = sqrt(pow((a.x - b.x), 2) + pow((a.y - b.y), 2));
 					if (diameter > ret)
@@ -183,6 +172,7 @@ double calculateDiameter(Cluster* someCluster, Point* allPoints, int numOfPoints
 	}
 	return ret;
 }
+
 double calculateQM(Cluster* clusterCenters, int numOfClusters)
 {
 	double q = 0;
@@ -201,9 +191,11 @@ double calculateQM(Cluster* clusterCenters, int numOfClusters)
 	q = q / count;
 	return q;
 }
-void writeResultsToFile(FILE* f, const char* outputPath, double time, int iter, double terminationQuality, Cluster* clusterCenters, int numOfClusters)
+
+void writeResultsToFile(const char* outputFile, double time, int iter, double terminationQuality, Cluster* clusterCenters, int numOfClusters)
 {
-	f = fopen(outputPath, "w");
+	FILE* f;
+	fopen_s(&f, outputFile, "w");
 	if (f == NULL)
 	{
 		printf("Failed opening the file. Exiting!\n");
@@ -222,13 +214,17 @@ void printPoints(Point* p, int numOfPoints)
 	for (int i = 0; i < numOfPoints; i++)
 		printf("%0.2f %0.2f\n", p[i].x, p[i].y);
 }
-void createRandomPointsFile(FILE *f)
+
+void createRandomPointsFile(const char* inputFile)
 {
-	srand(time(NULL));
-	fputs("5000 4 30 0.1 2000 7.3\n", f);
-	for (int i = 0; i < 5000; i++)
+	FILE* f;
+	fopen_s(&f, inputFile, "w");
+	checkFile(f);
+	srand((unsigned int)time(NULL));
+	fputs("10000 4 30 0.1 2000 7.3\n", f);
+	for (int i = 0; i < 10000; i++)
 	{
-		fprintf(f, "%.2f %.2f %.2f %.2f\n", double((rand() % 20000) - 10000)/100, double((rand() % 20000) - 10000)/100, double((rand() % 40000) - 20000)/100, double((rand() % 40000) - 20000)/100);
+		fprintf(f, "%.2f %.2f %.2f %.2f\n", double((rand() % 20000) - 10000) / 100, double((rand() % 20000) - 10000) / 100, double((rand() % 40000) - 20000) / 100, double((rand() % 40000) - 20000) / 100);
 	}
 	fclose(f);
 }
