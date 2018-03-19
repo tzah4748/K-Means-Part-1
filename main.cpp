@@ -102,6 +102,7 @@ int main(int argc, char *argv[])
 	free(clusterCenters);
 	t2 = clock();
 	printf("K-Means Time: %f\n", (double)(t2 - t1) / CLOCKS_PER_SEC);
+	
 	return 0;
 }
 
