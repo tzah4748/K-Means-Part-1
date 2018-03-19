@@ -27,15 +27,21 @@ typedef struct point_t
 } Point;
 
 void checkFile(FILE* f);
+
 Point* getPointsFromFile(const char* inputFile, int* numOfPoints, int* numOfClusters, double* timeInterval, double* deltaTime, int* maxIterations, double* qualityMeasure);
+
 Cluster* initializeClusters(Point* allPoints, int numOfClusters);
 
 double xPosition(Point p, double time);
+
 double yPosition(Point p, double time);
 
 double calculateDiameter(Point* allPoints, int numOfPoints, int clusterIndex);
+
 double calculateQM(Cluster* clusterCenters, int numOfClusters);
+
 void writeResultsToFile(const char* outputFile, double time, int iter, double terminationQuality, Cluster* clusterCenters, int numOfClusters);
 
 void printPoints(Point* p, int numOfPoints);
+
 void createRandomPointsFile(const char* inputFile);
